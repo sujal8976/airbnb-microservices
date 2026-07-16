@@ -1,0 +1,168 @@
+version: "3.9"
+
+x-common-env: &common-env
+  JWT_SECRET: "dev-super-secret-change-me"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672"
+  REDIS_URL: "redis://redis:6379"
+
+services:
+  # ---------- Infra ----------
+  postgres:
+    image: postgres:16-alpine
+    container_name: airbnb-postgres
+    environment:
+      POSTGRES_USER: airbnb
+      POSTGRES_PASSWORD: airbnb
+      POSTGRES_DB: airbnb
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airbnb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: airbnb-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: airbnb-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672" # management UI (guest/guest)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Services ----------
+  user-service:
+    build: ./services/user
+    container_name: airbnb-user-service
+    environment:
+      <<: *common-env
+      PORT: 4001
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/user_db"
+    ports:
+      - "4001:4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  listing-service:
+    build: ./services/listing
+    container_name: airbnb-listing-service
+    environment:
+      <<: *common-env
+      PORT: 4002
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/listing_db"
+      USER_SERVICE_URL: "http://user-service:4001"
+    ports:
+      - "4002:4002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  search-service:
+    build: ./services/search
+    container_name: airbnb-search-service
+    environment:
+      <<: *common-env
+      PORT: 4003
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/search_db"
+    ports:
+      - "4003:4003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  booking-service:
+    build: ./services/booking
+    container_name: airbnb-booking-service
+    environment:
+      <<: *common-env
+      PORT: 4004
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/booking_db"
+      LISTING_SERVICE_URL: "http://listing-service:4002"
+      USER_SERVICE_URL: "http://user-service:4001"
+    ports:
+      - "4004:4004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  payment-service:
+    build: ./services/payment
+    container_name: airbnb-payment-service
+    environment:
+      <<: *common-env
+      PORT: 4005
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/payment_db"
+    ports:
+      - "4005:4005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification
+    container_name: airbnb-notification-service
+    environment:
+      <<: *common-env
+      PORT: 4006
+      DATABASE_URL: "postgres://airbnb:airbnb@postgres:5432/notification_db"
+    ports:
+      - "4006:4006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: airbnb-frontend
+    environment:
+      VITE_USER_API: "http://localhost:4001"
+      VITE_LISTING_API: "http://localhost:4002"
+      VITE_SEARCH_API: "http://localhost:4003"
+      VITE_BOOKING_API: "http://localhost:4004"
+    ports:
+      - "80:80"
+    depends_on:
+      - user-service
+      - listing-service
+      - search-service
+      - booking-service
+
+volumes:
+  pgdata:
