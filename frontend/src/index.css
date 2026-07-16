@@ -1,1 +1,116 @@
+/* ===========================================================
+   Waypost design tokens
+   Subject: a home-stay marketplace. Signature idea: bookings are
+   rendered as boarding passes / travel tickets — perforated tear
+   line, rotated rubber-stamp status, monospace manifest rows.
+   Built with Tailwind CSS v4 (CSS-first config via @theme).
+   =========================================================== */
+
 @import "tailwindcss";
+
+@theme {
+  --color-paper: #eeece0;
+  --color-paper-raised: #f6f4ea;
+  --color-ink: #1a2b27;
+  --color-ink-soft: #445450;
+  --color-marine: #0e6e63;
+  --color-marine-deep: #0a4f47;
+  --color-brass: #c68a2e;
+  --color-brass-soft: #e7cf9c;
+  --color-stamp-red: #a63a2e;
+  --color-line: #cfc8b4;
+  --color-line-strong: #a8a08a;
+
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+
+  --radius-card: 10px;
+
+  --shadow-card: 0 1px 0 rgba(26, 43, 39, 0.06), 0 8px 24px rgba(26, 43, 39, 0.08);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply m-0 bg-paper text-ink font-body antialiased;
+    background-image: radial-gradient(circle at 1px 1px, rgba(26, 43, 39, 0.05) 1px, transparent 0);
+    background-size: 22px 22px;
+  }
+
+  a {
+    @apply text-marine-deep;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  :focus-visible {
+    @apply outline outline-2 outline-marine outline-offset-2;
+  }
+}
+
+@layer components {
+  /* Listing card cover — location label baked into the ::after pseudo-element */
+  .listing-card-media::after {
+    content: attr(data-loc);
+    @apply absolute bottom-2.5 left-3 text-white font-mono text-[0.72rem] uppercase tracking-wide opacity-90;
+  }
+
+  /* Rubber-stamp booking status */
+  .stamp {
+    @apply inline-block rounded-md border-2 px-2.5 py-1.5 font-mono text-[0.78rem] font-semibold uppercase tracking-wide;
+    border-color: currentColor;
+    transform: rotate(-8deg);
+  }
+  .stamp-confirmed {
+    @apply text-marine-deep;
+  }
+  .stamp-pending {
+    @apply text-brass;
+  }
+  .stamp-failed,
+  .stamp-cancelled {
+    @apply text-stamp-red;
+  }
+
+  /* Boarding-pass ticket stub — perforated tear line + punch holes */
+  .ticket-stub {
+    @apply relative flex items-center justify-center;
+    background-image: repeating-linear-gradient(
+      var(--color-paper-raised),
+      var(--color-paper-raised) 6px,
+      transparent 6px,
+      transparent 12px
+    );
+  }
+  .ticket-stub::before {
+    content: "";
+    @apply absolute inset-y-0 left-0 w-0 border-l-2 border-dashed border-line-strong;
+  }
+  .ticket-stub::after {
+    content: "";
+    @apply absolute h-5 w-5 rounded-full bg-paper;
+    left: calc(100% - 120px - 10px);
+    bottom: -10px;
+  }
+  .ticket-punch::before {
+    content: "";
+    @apply absolute h-5 w-5 rounded-full bg-paper;
+    left: calc(100% - 120px - 10px);
+    top: -10px;
+  }
+}
