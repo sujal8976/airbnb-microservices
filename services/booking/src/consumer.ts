@@ -1,5 +1,5 @@
-import { pool } from "./db";
-import { subscribeToEvents, publishEvent } from "./rabbitmq";
+import { pool } from "./db.js";
+import { subscribeToEvents, publishEvent } from "./rabbitmq.js";
 
 interface PaymentEvent {
   bookingId: string;

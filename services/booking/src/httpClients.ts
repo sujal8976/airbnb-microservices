@@ -1,12 +1,12 @@
 import axios from "axios";
 
 const listingClient = axios.create({
-  baseURL: process.env.LISTING_SERVICE_URL,
+  baseURL: process.env.LISTING_SERVICE_URL || "http://localhost:4002",
   timeout: 5000,
 });
 
 const userClient = axios.create({
-  baseURL: process.env.USER_SERVICE_URL,
+  baseURL: process.env.USER_SERVICE_URL || "http://localhost:4001",
   timeout: 5000,
 });
 

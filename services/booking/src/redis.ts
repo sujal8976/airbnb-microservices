@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import { randomUUID } from "crypto";
 
 export const redis = new Redis(process.env.REDIS_URL as string, {

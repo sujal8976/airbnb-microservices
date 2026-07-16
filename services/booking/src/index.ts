@@ -1,12 +1,13 @@
 import cors from "cors";
 import express from "express";
 import { z } from "zod";
-import { pool } from "./db";
-import { connectRabbitMQ, publishEvent } from "./rabbitmq";
-import { acquireLock, releaseLock } from "./redis";
-import { getListing, getUser } from "./httpClients";
-import { startBookingConsumer } from "./consumer";
-import { AuthedRequest, requireAuth } from "./middleware/auth";
+import { pool } from "./db.js";
+import { connectRabbitMQ, publishEvent } from "./rabbitmq.js";
+import { acquireLock, releaseLock } from "./redis.js";
+import { getListing, getUser } from "./httpClients.js";
+import { startBookingConsumer } from "./consumer.js";
+import type { AuthedRequest } from "./middleware/auth.js";
+import { requireAuth } from "./middleware/auth.js";
 
 const app = express();
 app.use(cors());
