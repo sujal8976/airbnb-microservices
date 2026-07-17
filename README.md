@@ -31,51 +31,56 @@ distributed lock for a real race condition, and a service that talks to
 ## 1. Architecture diagram
 
 ```
-                                    ┌─────────────────────────┐
-                                    │        Frontend          │
-                                    │   React + Vite  :5173    │
-                                    │        "Waypost"         │
-                                    └────┬───┬───┬───┬─────────┘
-                                         │   │   │   │
-                     REST                │   │   │   │  REST
-              ┌──────────────────────────┘   │   │   └──────────────────────┐
-              │                    ┌──────────┘   └──────────┐              │
-              ▼                    ▼                          ▼              ▼
-    ┌──────────────────┐  ┌──────────────────┐      ┌──────────────────┐  ┌──────────────────┐
-    │   User Service    │  │  Listing Service  │      │  Search Service   │  │ Booking Service  │
-    │      :4001        │  │      :4002        │      │      :4003        │  │      :4004       │
-    │  register / login  │  │  CRUD listings    │      │  search / filter  │  │  create booking  │
-    │  JWT issuing        │  │                    │      │                    │  │  cancel booking  │
-    │                    │  │  ┌──────────────┐  │      │  ┌──────────────┐  │  │                  │
-    │  Postgres:user_db  │  │  │ Redis cache  │  │      │  │ Redis cache  │  │  │ Postgres:        │
-    │                    │  │  └──────────────┘  │      │  └──────────────┘  │  │  booking_db      │
-    └─────────┬──────────┘  │  Postgres:         │      │  Postgres:         │  │ ┌──────────────┐ │
-              │             │   listing_db       │      │   search_db        │  │ │ Redis LOCK   │ │
-              │             └─────────┬──────────┘      └─────────▲──────────┘  │ └──────────────┘ │
-              │                       │                            │             └───┬──────┬───────┘
-              │                       │ listing.created             │ consumes         │      │
-              │                       │ listing.updated ────────────┘ listing.*        │      │
+                                    ┌──────────────────────────┐
+                                     │     Nginx Gateway        │
+                                     │        :80               │
+                                     └────┬───┬───┬───┬─────────┘
+                                       │   │   │   │
+                                       ▼   ▼   ▼   ▼
+                                     ┌──────────────────────────┐
+                                     │        Frontend          │
+                                     │   React + Vite  (SPA)    │
+                                     │        "Waypost"         │
+                                     └──────────────────────────┘
+                               REST                │   │   │   │  REST
+              ┌──────────────────────────┘   │   │   └────────────────────────────────┐
+              │                    ┌─────────┘   └────────────┐                       │
+              ▼                    ▼                          ▼                       ▼
+    ┌────────────────────┐  ┌───────────────────┐      ┌────────────────────┐  ┌──────────────────┐
+    │   User Service     │  │  Listing Service  │      │  Search Service    │  │ Booking Service  │
+    │      :4001         │  │      :4002        │      │      :4003         │  │      :4004       │
+    │  register / login  │  │  CRUD listings    │      │  search / filter   │  │  create booking  │
+    │  JWT issuing       │  │                   │      │                    │  │  cancel booking  │
+    │                    │  │  ┌──────────────┐ │      │  ┌──────────────┐  │  │                  │
+    │  Postgres:user_db  │  │  │ Redis cache  │ │      │  │ Redis cache  │  │  │ Postgres:        │
+    │                    │  │  └──────────────┘ │      │  └──────────────┘  │  │  booking_db      │
+    └─────────┬──────────┘  │  Postgres:        │      │  Postgres:         │  │ ┌──────────────┐ │
+              │             │   listing_db      │      │   search_db        │  │ │ Redis LOCK   │ │
+              │             └─────────┬─────────┘      └─────────▲──────────┘  │ └──────────────┘ │
+              │                       │                            │           └───────┬──────┬───┘
+              │                       │ listing.created            | consumes          │      │
+              │                       │ listing.updated ───────────┘ listing.*         │      │
               │                       │ listing.deleted                                │      │
               │                       ▼                                                │      │
               │             ┌──────────────────────────────────────────────┐           │      │
-              │             │      RabbitMQ topic exchange "airbnb.events"  │◀──────────┘      │
-              │◀────────────┤                                                │◀─────────────────┘
-   user.registered          │   every service below publishes AND/OR        │  payment.requested
-   (published on             consumes here — nobody calls Notification      │
-    register)                directly, it only listens                     │
+              │             │      RabbitMQ topic exchange "airbnb.events" │◀──────────┘      │
+              │◀────────────┤                                              │◀─────────────────┘
+   user.registered          │    every service below publishes AND/OR      │  payment.requested
+   (published on            │   consumes here — nobody calls Notification  │
+    register)               │   directly, it only listens                  │
               │             └───┬───────────────────────┬────────────────┬─┘
-              │                 │ consumes               │ consumes       │ payment.success
-              │                 │ user.registered         │ booking.*      │ payment.failed
-              │                 │ booking.confirmed        │ payment.*      │ (published back)
-              │                 │ booking.failed            │                │
-              │                 │ booking.cancelled          │                ▼
-              │                 │ payment.success              │   ┌──────────────────┐
-              │                 │ payment.failed                 ▼  │  Payment Service │
-              │                 ▼                        ┌──────────────────┐  :4005    │
-              │        ┌──────────────────────┐          │ (consumes         │           │
-              │        │ Notification Service  │          │  payment.requested,│ Postgres: │
-              │        │       :4006            │          │  publishes result) │ payment_db│
-              │        │  (event listener only  │          └──────────────────┘           │
+              │                 │ consumes              │ consumes       │ payment.success
+              │                 │ user.registered       │ booking.*      │ payment.failed
+              │                 │ booking.confirmed     │ payment.*      │ (published back)
+              │                 │ booking.failed        │                │
+              │                 │ booking.cancelled     │                ▼
+              │                 │ payment.success       │                      ┌──────────────────┐
+              │                 │ payment.failed        ▼                      │  Payment Service │
+              │                 ▼                      ┌────────────────────┐              :4005    │
+              │        ┌──────────────────────┐        │ (consumes          │    │           │
+              │        │ Notification Service  │       │  payment.requested,│         │ Postgres: │
+              │        │       :4006            │      │  publishes result) │           │ payment_db│
+              │        │  (event listener only  │      └────────────────────┘           │
               │        │   — no inbound REST     │                                          │
               │        │   calls from any        │◀── GET /users/:id ──────────────────────┘
               │        │   other service)         │    GET /listings/:id
@@ -85,6 +90,14 @@ distributed lock for a real race condition, and a service that talks to
               │
               └── GET /users/:id  ◀── called synchronously by Booking Service
 ```
+
+The browser talks to the app through the Nginx gateway at `http://localhost`, which forwards:
+- `/` to the frontend container
+- `/api/user/*` to User Service
+- `/api/listing/*` to Listing Service
+- `/api/search/*` to Search Service
+- `/api/booking/*` to Booking Service
+- `/api/payment/*` to Payment Service
 
 **Legend**
 - **Solid arrows into the exchange** = a service *publishes* an event (fire-and-forget).
@@ -406,11 +419,13 @@ This starts, in dependency order:
 - **Redis**
 - **RabbitMQ** (management UI at `http://localhost:15672`, guest/guest)
 - All 6 services
-- **Frontend** at `http://localhost:5173`
+- **Frontend** behind the Nginx gateway at `http://localhost`
+- **Nginx gateway** at `http://localhost`
 
 | Component | URL |
 |---|---|
-| Frontend | http://localhost:5173 |
+| Frontend | http://localhost |
+| Nginx gateway | http://localhost |
 | User Service | http://localhost:4001 |
 | Listing Service | http://localhost:4002 |
 | Search Service | http://localhost:4003 |
