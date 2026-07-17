@@ -1,9 +1,14 @@
-FROM node:20-alpine
+FROM node:24-alpine3.23 AS builder
 WORKDIR /app
-COPY package.json ./
-RUN npm install
-COPY tsconfig.json ./
-COPY src ./src
+COPY package*.json ./
+RUN npm ci
+COPY . .
 RUN npm run build
+
+FROM gcr.io/distroless/nodejs24-debian12:nonroot
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=builder /app/dist ./dist
 EXPOSE 4003
-CMD ["npm", "start"]
+
+CMD ["dist/index.cjs"]
