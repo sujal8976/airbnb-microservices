@@ -22,6 +22,7 @@ build/
 public/
 *.log
 npm-debug.log*
+tsconfig.tsbuildinfo
 
 # OS
 Thumbs.db
