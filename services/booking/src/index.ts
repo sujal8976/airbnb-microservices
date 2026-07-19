@@ -109,6 +109,7 @@ app.post("/bookings", requireAuth, async (req: AuthedRequest, res) => {
       bookingId: booking.id,
       guestId,
       amount: totalPrice,
+      guestEmail: guest.email,
     });
 
     res.status(202).json({ ...booking, message: "Booking created, awaiting payment confirmation" });
