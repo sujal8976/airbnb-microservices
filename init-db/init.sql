@@ -113,7 +113,8 @@ CREATE TABLE IF NOT EXISTS notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID,
     type VARCHAR(50) NOT NULL,
-    message TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    message VARCHAR(150) NOT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'sent',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
