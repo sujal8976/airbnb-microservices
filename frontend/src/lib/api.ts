@@ -1,7 +1,8 @@
-const USER_API = import.meta.env.VITE_USER_API || "http://localhost:4001";
-const LISTING_API = import.meta.env.VITE_LISTING_API || "http://localhost:4002";
-const SEARCH_API = import.meta.env.VITE_SEARCH_API || "http://localhost:4003";
-const BOOKING_API = import.meta.env.VITE_BOOKING_API || "http://localhost:4004";
+const USER_API = import.meta.env.VITE_USER_API || "/api/user";
+const LISTING_API = import.meta.env.VITE_LISTING_API || "/api/listing";
+const SEARCH_API = import.meta.env.VITE_SEARCH_API || "/api/search";
+const BOOKING_API = import.meta.env.VITE_BOOKING_API || "/api/booking";
+const PAYMENT_API = import.meta.env.VITE_PAYMENT_API || "/api/payment";
 
 export interface User {
   id: string;
@@ -34,6 +35,14 @@ export interface Booking {
   endDate: string;
   totalPrice: number;
   status: "pending" | "confirmed" | "failed" | "cancelled";
+  createdAt: string;
+}
+
+export interface Payment {
+  id: string;
+  bookingId: string;
+  amount: number;
+  status: "success" | "failed";
   createdAt: string;
 }
 
@@ -104,6 +113,49 @@ export const bookingApi = {
   mine: () => request<Booking[]>(`${BOOKING_API}/bookings`),
   get: (id: string) => request<Booking>(`${BOOKING_API}/bookings/${id}`),
   cancel: (id: string) => request<Booking>(`${BOOKING_API}/bookings/${id}/cancel`, { method: "POST" }),
+};
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchBookingPayment(bookingId: string): Promise<Payment | null> {
+  const res = await fetch(`${PAYMENT_API}/payments/booking/${bookingId}`);
+
+  if (res.status === 404) return null;
+
+  const isJson = res.headers.get("content-type")?.includes("application/json");
+  const body = isJson ? await res.json().catch(() => null) : null;
+
+  if (!res.ok) {
+    const message = body?.error ? (typeof body.error === "string" ? body.error : JSON.stringify(body.error)) : `Request failed (${res.status})`;
+    throw new Error(message);
+  }
+
+  return body as Payment;
+}
+
+export const paymentApi = {
+  getBookingPayment: (bookingId: string) => fetchBookingPayment(bookingId),
+  pollBookingPayment: async (
+    bookingId: string,
+    options: { intervalMs?: number; timeoutMs?: number } = {}
+  ): Promise<Payment> => {
+    const intervalMs = options.intervalMs ?? 2000;
+    const timeoutMs = options.timeoutMs ?? 30000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const payment = await fetchBookingPayment(bookingId);
+      if (payment && (payment.status === "success" || payment.status === "failed")) {
+        return payment;
+      }
+
+      await sleep(intervalMs);
+    }
+
+    throw new Error("Timed out waiting for payment confirmation");
+  },
 };
 
 export function saveSession(user: User, token: string) {

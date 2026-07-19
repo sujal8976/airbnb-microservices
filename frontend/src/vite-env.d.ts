@@ -5,6 +5,7 @@ interface ImportMetaEnv {
   readonly VITE_LISTING_API: string;
   readonly VITE_SEARCH_API: string;
   readonly VITE_BOOKING_API: string;
+  readonly VITE_PAYMENT_API: string;
 }
 
 interface ImportMeta {
