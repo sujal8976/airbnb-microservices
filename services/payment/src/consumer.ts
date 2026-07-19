@@ -5,6 +5,7 @@ interface PaymentRequested {
   bookingId: string;
   guestId: string;
   amount: number;
+  guestEmail: string;
 }
 
 // Demo rule: payments fail ~10% of the time, purely to make the async
@@ -37,6 +38,7 @@ export async function startPaymentConsumer() {
         paymentId,
         amount: payload.amount,
         status,
+        guestEmail: payload.guestEmail,
       });
 
       console.log(`[payment-service] Processed payment ${paymentId} for booking ${payload.bookingId}: ${status}`);

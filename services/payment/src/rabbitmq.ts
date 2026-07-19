@@ -65,7 +65,7 @@ export async function subscribeToEvents(
     } catch (err) {
       console.error(`Error handling message on ${queueName}`, err);
       channel!.nack(msg, false, false);
-    }
+    }msg
   });
   console.log(`Subscribed queue "${queueName}" to [${routingKeys.join(", ")}]`);
 }
