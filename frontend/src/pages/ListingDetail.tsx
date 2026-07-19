@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { Listing } from "../lib/api";
-import { listingApi, bookingApi } from "../lib/api";
+import { bookingApi, listingApi, paymentApi } from "../lib/api";
 import { useAuth } from "../lib/auth";
 
 export function ListingDetail() {
@@ -46,8 +46,14 @@ export function ListingDetail() {
     setBookingResult(null);
     try {
       const result = await bookingApi.create({ listingId: id, startDate, endDate });
+      setBookingResult(`Booking created (status: ${result.status}). Waiting for payment confirmation…`);
+
+      const payment = await paymentApi.pollBookingPayment(result.id, { intervalMs: 2000, timeoutMs: 30000 });
+      const finalStatus = payment.status === "success" ? "confirmed" : "failed";
       setBookingResult(
-        `Booking created (status: ${result.status}). Payment is processing — check "My bookings" in a few seconds for confirmation.`
+        finalStatus === "confirmed"
+          ? "Payment succeeded. Your booking is confirmed."
+          : "Payment failed. Your booking was not confirmed."
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
